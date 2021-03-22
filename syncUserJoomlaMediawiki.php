@@ -1,8 +1,10 @@
 <?php
 #
-# Transfer Joomla user accounts into mediawiki. This script takes all accounts and password from
-# a Joomla installation and creates the identical users (and passwords) on the mediawiki side.
-# This can be used to allow Joomla users to use a mediawiki with identical credentials.
+# Transfer Joomla user accounts into mediawiki. This script takes all
+# accounts and password from a Joomla installation and creates the
+# identical users (and passwords) on the mediawiki side.  This can be
+# used to allow Joomla users to use a mediawiki with identical
+# credentials.
 # 
 # (Copyright (C) 2022, Dr. Tilmann Bubeck, tilmann@bubecks.de
 #
@@ -23,14 +25,17 @@
 
 ## Transfer joomla password into mediawiki password.
 #
-# Joomla always uses bcrypt hash function inside PHP's password_hash to generate the hashed password.
-# Mediawiki is able to handle multiple hash functions and therefore needs to know, which hash function
-# is used for the given hash value. This is done with the ":algo:" prefix. By using ":bcrypt:" mediawiki
-# will use also use bcrypt to hash the value. This means, that we can transfer the hash value without knowing
-# the real password. 
+# Joomla always uses bcrypt hash function inside PHP's password_hash
+# to generate the hashed password.  Mediawiki is able to handle
+# multiple hash functions and therefore needs to know, which hash
+# function is used for the given hash value. This is done with the
+# ":algo:" prefix. By using ":bcrypt:" mediawiki will use also use
+# bcrypt to hash the value. This means, that we can transfer the hash
+# value without knowing the real password.
 #
-# Another (small) difference is, that Joomla concatenates salt and hash without a delimiter and mediawiki
-# uses "$" as a delimiter between salt and hash.
+# Another (small) difference is, that Joomla concatenates salt and
+# hash without a delimiter and mediawiki uses "$" as a delimiter
+# between salt and hash.
 #
 # @param joomla password hash
 #
@@ -55,11 +60,15 @@ function transfer_j_pw_to_mw($j_password) {
 # @param password the password to set
 #
 function create_mw_user($username, $password) {
+    global $dry_run;
+    
     verbose("Creating mediawiki user $username and password $password");
     $cmd = "php " . MEDIAWIKI_PATH . "/maintenance/createAndPromote.php --conf " . MEDIAWIKI_PATH . "/LocalSettings.php $username $password";
-    system($cmd, $ret);
-    ($ret == 0) or die("returned an error $ret: $cmd");
-
+    verbose($cmd);
+    if ( ! $dry_run ) {
+        system($cmd, $ret);
+        ($ret == 0) or die("returned an error $ret: $cmd");
+    }
 }    
 
 ## Update user in mediawiki with the given username and password.
@@ -68,10 +77,13 @@ function create_mw_user($username, $password) {
 # @param password the new password hash to setAttribute#
 function update_mw_password($username, $password) {
     global $conn;
+    global $dry_run;
     
     verbose("Updating mediawiki user $username to password $password");
-    $stmt = $conn->prepare("UPDATE user SET user_password=? WHERE user_name=?");
-    $stmt->execute([$password, $username]);
+    if ( ! $dry_run ) {
+        $stmt = $conn->prepare("UPDATE user SET user_password=? WHERE user_name=?");
+        $stmt->execute([$password, $username]);
+    }
 }    
 
 function verbose($string) {
@@ -82,7 +94,7 @@ function verbose($string) {
     }
 }
 
-$options = getopt("vj:m:x:h");
+$options = getopt("vj:m:x:hk");
 
 if (array_key_exists("h", $options)) {
     print <<<EOT
@@ -94,6 +106,7 @@ This can be used to keep accounts and passwords in sync between Joomla and media
   -v verbose 
   -h help
   -x exclude-user
+  -k dry-run
   
 The option "-x" can be given multiple times to specify Joomla user names, which should not be transferred. This is e.g. typically admin.
 
@@ -101,6 +114,8 @@ EOT;
     exit(0);
 }
         
+$dry_run = array_key_exists("k", $options);
+
 $skip_users_joomla = array();
 if (array_key_exists("x", $options)) {
     if (is_array($options["x"])) {
@@ -219,6 +234,8 @@ foreach ($joomla_users as $j_user) {
                 verbose("Joomla user {$j_user["username"]} password changed to         {$j_user["password"]}");
                 $mw_user["user_password"] = $mw_pw;
                 update_mw_password($mw_user["user_name"], $mw_user["user_password"]);
+            } else {
+                verbose("Joomla user {$j_user["username"]} and mediawiki user {$mw_user["user_name"]} in sync.");
             }
         }
     }
