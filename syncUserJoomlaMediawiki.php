@@ -6,7 +6,7 @@
 # used to allow Joomla users to use a mediawiki with identical
 # credentials.
 # 
-# (Copyright (C) 2022, Dr. Tilmann Bubeck, tilmann@bubecks.de
+# Copyright (C) 2022, Dr. Tilmann Bubeck, tilmann@bubecks.de
 #
 #
 #    This program is free software: you can redistribute it and/or modify
@@ -132,8 +132,8 @@ if (array_key_exists("j", $options)) {
         exit(1);
     }
 } else {
-  print "Please use option -j to give directory of joomla containing configuration.php\n";
-  exit(1);
+    print "Please use option -j to give directory of joomla containing configuration.php\n";
+    exit(1);
 }
 
 if (array_key_exists("m", $options)) {
@@ -143,8 +143,8 @@ if (array_key_exists("m", $options)) {
         exit(1);
     }
 } else {
-  print "Please use option -m to give directory of mediawiki containing LocalSettings.php\n";
-  exit(1);
+    print "Please use option -m to give directory of mediawiki containing LocalSettings.php\n";
+    exit(1);
 }
 
 require_once JOOMLA_PATH . '/configuration.php';
@@ -171,7 +171,7 @@ switch($conf->dbtype) {
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 # [2] get all user names and passwords from Joomla
-$stmt = $conn->prepare("SELECT username, password FROM {$conf->dbprefix}users");
+$stmt = $conn->prepare("SELECT username, password, block FROM {$conf->dbprefix}users");
 $stmt->execute();
 $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -179,7 +179,9 @@ $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $joomla_users = array();
 foreach ($result as $user) {
 	if ( !in_array($user["username"], $skip_users_joomla) ) {
-	     array_push ($joomla_users, $user); 
+        if ( $user["block"] == 0 ) {
+            array_push ($joomla_users, $user); 
+        }
 	} else {
         verbose("Skipping Joomla user {$user["username"]}");
 	}
