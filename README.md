@@ -14,6 +14,16 @@ This will take all users from joomla and transfer them into
 mediawiki. This could be done once or regularly (e.g. once a day to
 keep mediawiki updated).
 
+## Dry-Run and verbose
+
+The command line argument "-v" turns on verbosity, where everything
+done by the script is printed to stdout. This helps understanding and
+debugging problems.
+
+By using the command line arguments "-k" you can do a dry run. In this
+mode nothing will be changed. You typically use this together with
+"-v" to see, what would have been done.
+
 ## How does it work?
 
 It connects to the database of joomla by using the credential found in
