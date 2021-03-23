@@ -8,7 +8,6 @@
 # 
 # Copyright (C) 2022, Dr. Tilmann Bubeck, tilmann@bubecks.de
 #
-#
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
@@ -21,7 +20,7 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+#
 
 ## Transfer joomla password into mediawiki password.
 #
@@ -63,7 +62,7 @@ function create_mw_user($username, $password) {
     global $dry_run;
     
     verbose("Creating mediawiki user $username and password $password");
-    $cmd = "php " . MEDIAWIKI_PATH . "/maintenance/createAndPromote.php --conf '" . MEDIAWIKI_PATH . "/LocalSettings.php' '$username' '$password'";
+    $cmd = "php '" . MEDIAWIKI_PATH . "/maintenance/createAndPromote.php' --conf '" . MEDIAWIKI_PATH . "/LocalSettings.php' '$username' '$password'";
     verbose($cmd);
     if ( ! $dry_run ) {
         system($cmd, $ret);
@@ -73,16 +72,15 @@ function create_mw_user($username, $password) {
 
 ## Update user in mediawiki with the given username and password.
 #
-# @param username the user to update the password
-# @param password the new password hash to setAttribute#
-function update_mw_password($username, $password) {
+# @param user an associate array describing the user to be updated
+function update_mw_user($user) {
     global $conn;
     global $dry_run;
     
-    verbose("Updating mediawiki user $username to password $password");
+    verbose("Updating mediawiki user");
     if ( ! $dry_run ) {
-        $stmt = $conn->prepare("UPDATE user SET user_password=? WHERE user_name=?");
-        $stmt->execute([$password, $username]);
+        $stmt = $conn->prepare("UPDATE user SET user_password=?, user_email=?, user_real_name=? WHERE user_id=?");
+        $stmt->execute([$user["user_password"], $user["user_email"], $user["user_real_name"], $user["user_id"] ]);
     }
 }    
 
@@ -158,6 +156,14 @@ require_once MEDIAWIKI_PATH . '/LocalSettings.php';
 
 $conf = new JConfig;   # Joomla configuration
 
+# This is an array to translate joomla database fields to mediawiki fields.
+$j_mw_keys = array(
+    # Joomla      MediaWiki
+    "password" => "user_password",
+    "email"    => "user_email",
+    "name"     => "user_real_name"
+);
+
 # [1] Connect to Joomla database
 switch($conf->dbtype) {
     case "mysqli":
@@ -171,7 +177,7 @@ switch($conf->dbtype) {
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 # [2] get all user names and passwords from Joomla
-$stmt = $conn->prepare("SELECT username, password, block FROM {$conf->dbprefix}users");
+$stmt = $conn->prepare("SELECT id, username, password, email, name, block FROM {$conf->dbprefix}users");
 $stmt->execute();
 $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -204,7 +210,7 @@ default:
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 # [5] get all user names and passwords from mediawiki
-$stmt = $conn->prepare("SELECT user_name, user_password FROM user");
+$stmt = $conn->prepare("SELECT user_id, user_name, user_password, user_email, user_real_name FROM user");
 $stmt->execute();
 $mw_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -226,16 +232,30 @@ foreach ($joomla_users as $j_user) {
     }
 }
 
+# Re-get the users, as names sometimes changed.
+$stmt = $conn->prepare("SELECT user_id, user_name, user_password, user_email, user_real_name FROM user");
+$stmt->execute();
+$mw_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 # [7] synchronize joomla password to mediawiki password
 foreach ($joomla_users as $j_user) {
     $user_found = 0;
     foreach ($mw_users as $mw_user) {
         if (strcasecmp($j_user["username"],$mw_user["user_name"]) == 0) {
-            $mw_pw = transfer_j_pw_to_mw($j_user["password"]);
-            if ($mw_pw != $mw_user["user_password"]) {
-                verbose("Joomla user {$j_user["username"]} password changed to         {$j_user["password"]}");
-                $mw_user["user_password"] = $mw_pw;
-                update_mw_password($mw_user["user_name"], $mw_user["user_password"]);
+            # transfer Joomla password into mediawiki style for later comparison
+            $j_user["password"] = transfer_j_pw_to_mw($j_user["password"]);
+            
+            $user_changed = false;
+            foreach ($j_mw_keys as $j_f => $mw_f) {
+                if ($mw_user[$mw_f] != $j_user[$j_f]) {
+                    verbose("mediawiki user {$mw_user["user_name"]} change of $mw_f from {$mw_user[$mw_f]} to {$j_user[$j_f]}");
+                    $mw_user[$mw_f] = $j_user[$j_f];
+                    $user_changed = true;
+                }
+            }
+            
+            if ($user_changed) {
+                update_mw_user($mw_user);
             } else {
                 verbose("Joomla user {$j_user["username"]} and mediawiki user {$mw_user["user_name"]} in sync.");
             }
