@@ -63,7 +63,7 @@ function create_mw_user($username, $password) {
     global $dry_run;
     
     verbose("Creating mediawiki user $username and password $password");
-    $cmd = "php " . MEDIAWIKI_PATH . "/maintenance/createAndPromote.php --conf " . MEDIAWIKI_PATH . "/LocalSettings.php $username $password";
+    $cmd = "php " . MEDIAWIKI_PATH . "/maintenance/createAndPromote.php --conf '" . MEDIAWIKI_PATH . "/LocalSettings.php' '$username' '$password'";
     verbose($cmd);
     if ( ! $dry_run ) {
         system($cmd, $ret);
