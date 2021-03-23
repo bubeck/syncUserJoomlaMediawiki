@@ -186,6 +186,12 @@ $joomla_users = array();
 foreach ($result as $user) {
 	if ( !in_array($user["username"], $skip_users_joomla) ) {
         if ( $user["block"] == 0 ) {
+            # Mediawiki does not allow certain characters in usernames. Remove them:
+            $mw_name = str_replace(array("@", "_"), array("", ""), $user["username"]);
+            if ( $mw_name != $user["username"] ) {
+                verbose("Joomla user {$user["user_name"]} changed to mediawiki name $mw_name.");
+            }
+            $user["username"] = $mw_name;
             array_push ($joomla_users, $user); 
         }
 	} else {
